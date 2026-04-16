@@ -7,7 +7,7 @@ const DEFAULT_OPTIONS = {
   sort: "nameasc",
   nodeList: false,
   ignoreCountryGroup: false,
-  userAgent: "sub2clash-workers/1.0",
+  userAgent: "",
   useUDP: false
 };
 

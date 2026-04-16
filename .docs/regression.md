@@ -320,3 +320,18 @@
 - 结果：
   - 当前仓库内已提交的测试与回归文档不再依赖真实订阅数据
   - 后续新增提交可按 `AGENTS.md` 中的脱敏规则进行统一约束
+
+## User-Agent 默认值回归 2026-04-16 18:30 CST
+
+- 状态：已完成
+- 目标：将远程订阅 `User-Agent` 改为默认留空，仅在用户主动填写时才随请求发送，并为输入框补充可选提示文案
+- 变更：
+  - `src/domain/config.js` 中 `userAgent` 默认值改为空字符串
+  - `frontend/src/lib/config.js` 中空配置初始值同步改为空字符串
+  - `frontend/src/pages/DashboardPage.jsx` 的 `User-Agent` 输入框新增 placeholder：`获取远程订阅时携带的 User-Agent 标识（可选）`
+- 测试：
+  - `bun run test:worker -- tests/unit/config.test.js tests/unit/render.test.js`
+  - `cd frontend && bun run vitest run src/pages/DashboardPage.user-agent.test.jsx`
+- 结果：
+  - 未填写 `User-Agent` 时，配置默认不再注入内置标识
+  - 前端页面默认展示空输入，并通过 placeholder 明确该项为可选

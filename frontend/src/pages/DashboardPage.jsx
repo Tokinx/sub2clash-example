@@ -528,6 +528,7 @@ export default function DashboardPage({ templates }) {
             <Field label="User-Agent" className="mt-3">
               <Input
                 value={config.options.userAgent}
+                placeholder="获取远程订阅时携带的 User-Agent 标识（可选）"
                 onChange={(event) =>
                   setConfig((current) => ({
                     ...current,
