@@ -5,8 +5,12 @@
 
 </div>
 <div align="right">
-本项目核心功能源自：<a href="https://github.com/bestnite/sub2clash" target="_blank">bestnite/sub2clash</a>
+本项目基于 <a href="https://github.com/bestnite/sub2clash" target="_blank">bestnite/sub2clash</a>，90% 由 AI 重新开发
 </div>
+
+## 界面预览
+
+![SnapShort](./snapshort.png)
 
 ## 核心功能
 
@@ -108,4 +112,4 @@ bun run dev
 
 ## 鸣谢
 
-本项目基于 <a href="https://github.com/bestnite/sub2clash" target="_blank">bestnite/sub2clash</a> AI 重新开发
+本项目基于 <a href="https://github.com/bestnite/sub2clash" target="_blank">bestnite/sub2clash</a>，90% 由 AI 重新开发
