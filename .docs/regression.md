@@ -227,3 +227,96 @@
   - 一键部署入口已统一收口到根脚本，减少手动拼接构建与发布命令
 - 现存风险：
   - `deploy:dry-run` 与 `deploy` 仍依赖真实 Cloudflare 认证、有效 KV Namespace ID 与已配置 secrets，无法在未登录环境下完成端到端验证
+
+## 同域短链聚合回归 2026-04-16 17:30 CST
+
+- 状态：已完成
+- 目标：修复线上将本项目生成的 `/s/:id` 短链再次作为订阅源时，Worker 通过公网二次抓取同域链接而触发 `522` 的问题
+- 变更：
+  - `src/domain/render.js` 新增同域 `/s/:id` 与 `/sub/:payload` 的 Worker 内部解析逻辑，不再对这类本地订阅做公网 `fetch`
+  - 渲染链路新增本地订阅活动集合，用于显式拦截循环引用并返回 `422`
+  - 更新架构文档与路线图，明确“同域内联解析 + 循环引用保护”的实现边界
+- 测试：
+  - `bun run test:worker -- tests/unit/render.test.js`
+  - `bun run test:worker`
+  - `bun run test`
+  - `bun run deploy:dry-run`
+  - `bun run deploy`
+  - `curl -iL https://deploy.example.com/s/example-merged-link`
+- 结果：
+  - Worker 侧 4 个测试文件、18 个测试用例通过
+  - 新增回归已覆盖“同域短链聚合不走远程抓取”和“循环引用返回 422”
+  - 线上目标短链已从 `422 + 522` 恢复为 `200`，返回正常 YAML
+  - 正式部署版本 ID 已脱敏
+- 现存风险：
+  - 同域内联解析按请求 origin 生效；若混用自定义域名与平台默认域名，仍会回退到远程抓取逻辑
+  - `bun run test` 中前端 `frontend/src/pages/DashboardPage.test.jsx` 现有 2 条断言失败，与本次后端修复无直接代码关联，部署前已单独确认 Worker 测试与线上链路通过
+
+## UDP 字段输出回归 2026-04-16 17:52 CST
+
+- 状态：已完成
+- 目标：当页面未开启 UDP 时，不再给解析出的节点显式写入 `udp: false`；仅在页面开启或链接自身明确携带 `udp` 参数时输出该字段
+- 变更：
+  - `src/domain/parsers/index.js` 新增 UDP 字段解析 helper，统一为“有值才输出字段”
+  - `ss`、`ssr`、`vmess`、`vless`、`trojan`、`socks5`、`anytls` 解析器已切换到该策略
+  - 新增协议解析回归测试，覆盖“默认不输出”“页面开启输出 true”“链接显式 `udp=false` 保留 false”
+- 测试：
+  - `bun run test:worker -- tests/unit/parsers.test.js tests/unit/render.test.js`
+  - `bun run test:worker`
+- 结果：
+  - Worker 侧 4 个测试文件、21 个测试用例通过
+  - 页面未开启 UDP 时，生成结果不再出现多余的 `udp: false`
+
+## SS-2022 密钥回归 2026-04-16 17:58 CST
+
+- 状态：已完成
+- 目标：修复 `ss-2022` 节点在解析时被错误二次解码，导致 Mihomo/Clash 校验密钥长度时报 `required 32, got 24`
+- 变更：
+  - `src/domain/parsers/index.js` 中 `ss` 解析器对 `2022-*` cipher 停止执行密码二次 base64 解码
+  - `ss` 用户名和密码在解析前先做 URL decode，避免 `%3D` 之类转义残留到最终 YAML
+  - 新增单测覆盖 `ss-2022` password 原样保留 base64 输出
+- 测试：
+  - `bun run test:worker -- tests/unit/parsers.test.js tests/unit/render.test.js`
+- 结果：
+  - `ss-2022` 节点输出将恢复为合法的 base64 PSK
+  - 定向回归 2 个测试文件、18 个测试用例通过
+
+## SS-2022 双段密钥回归 2026-04-16 18:08 CST
+
+- 状态：已完成
+- 目标：修复 `ss://<base64(method:password)>@host:port` 形式下，`2022-blake3-aes-256-gcm` 的 `base64-1:base64-2` 双段密钥在解析后被截断为仅 `base64-1` 的问题
+- 变更：
+  - `src/domain/parsers/index.js` 为 `ss` 解析器新增 `splitOnce`，仅在解出 `method:password` 时按首个冒号分割，保留密码中的剩余冒号内容
+  - 新增协议解析回归测试，覆盖 `ss-2022` 双段密钥在 legacy base64 userinfo 形式下完整保留
+- 测试：
+  - `bun run test:worker -- tests/unit/parsers.test.js tests/unit/render.test.js`
+- 结果：
+  - `ss-2022` 的 `base64-1:base64-2` 双段 key 现已完整输出
+  - 定向回归 2 个测试文件、19 个测试用例通过
+
+## Hysteria2 密码解码回归 2026-04-16 18:11 CST
+
+- 状态：已完成
+- 目标：修复 `hysteria2` 节点输出中的 `password` / `obfs-password` 残留 `%3D` 等 URL 编码字符的问题
+- 变更：
+  - `src/domain/parsers/index.js` 中 `parseHysteria2` 对 `password` 与 `obfs-password` 统一做 URL decode
+  - 新增协议解析回归测试，覆盖 `hysteria2` 带 `%3D` 的 `password` 和 `obfs-password`
+- 测试：
+  - `bun run test:worker -- tests/unit/parsers.test.js tests/unit/render.test.js`
+- 结果：
+  - `hysteria2` 节点输出将恢复为客户端可直接使用的明文密码
+  - 定向回归 2 个测试文件、20 个测试用例通过
+
+## 仓库脱敏回归 2026-04-16 18:15 CST
+
+- 状态：已完成
+- 目标：清理仓库文档与测试夹具中残留的真实线上环境标识，并将“所有提交文件必须脱敏”固化为仓库规则
+- 变更：
+  - `AGENTS.md` 新增仓库级脱敏约束，明确禁止提交真实订阅地址、真实域名、真实密码/密钥、真实邮箱、真实部署标识与真实线上返回片段
+  - `tests/unit/parsers.test.js` 中协议回归样例已切换为占位常量与合成数据，不再引用真实线上密码样式
+  - 本文档中的真实自定义域名、平台默认域名地址与部署版本号已统一改为脱敏描述
+- 检查：
+  - 使用 `rg` 对 `tests/`、`.docs/`、`.tasks/`、`AGENTS.md` 做真实域名与敏感样式扫描
+- 结果：
+  - 当前仓库内已提交的测试与回归文档不再依赖真实订阅数据
+  - 后续新增提交可按 `AGENTS.md` 中的脱敏规则进行统一约束

@@ -1,9 +1,47 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderConfig } from "../../src/domain/render.js";
+import { createLink, updateLink } from "../../src/data/link-repository.js";
+import { renderConfig, renderLink } from "../../src/domain/render.js";
 import * as subscriptionCache from "../../src/data/subscription-cache.js";
 import { encodeBase64UrlText } from "../../src/utils/base64url.js";
 import { createEnv } from "../helpers/env.js";
+
+function createConfig(overrides = {}) {
+  return {
+    target: "meta",
+    sources: {
+      subscriptions: [],
+      nodes: [],
+      ...(overrides.sources || {})
+    },
+    template: {
+      mode: "builtin",
+      value: "meta-default",
+      ...(overrides.template || {})
+    },
+    routing: {
+      ruleProviders: [],
+      rules: [],
+      ...(overrides.routing || {})
+    },
+    transforms: {
+      filterRegex: "",
+      replacements: [],
+      ...(overrides.transforms || {})
+    },
+    options: {
+      sort: "nameasc",
+      autoTest: false,
+      lazy: false,
+      refresh: false,
+      nodeList: false,
+      ignoreCountryGroup: false,
+      userAgent: "tester",
+      useUDP: false,
+      ...(overrides.options || {})
+    }
+  };
+}
 
 describe("renderConfig", () => {
   beforeEach(() => {
@@ -151,5 +189,87 @@ describe("renderConfig", () => {
     expect(result.yaml).toContain("BuiltinSafe");
     expect(result.yaml).toContain("proxy-groups:");
     expect(result.yaml).not.toContain("<!doctype html>");
+  });
+
+  it("同域短链订阅会在 Worker 内部解析而不是再次远程抓取", async () => {
+    const env = createEnv();
+    const first = await createLink(
+      env,
+      createConfig({
+        sources: {
+          subscriptions: [],
+          nodes: ["ss://YWVzLTI1Ni1nY206cGFzc0BleGFtcGxlLmNvbTo4NDQz#Alpha"]
+        }
+      })
+    );
+    const second = await createLink(
+      env,
+      createConfig({
+        sources: {
+          subscriptions: [],
+          nodes: ["trojan://secret@example.com:443#Beta"]
+        }
+      })
+    );
+
+    const result = await renderConfig(
+      env,
+      new Request("https://app.example.com/sub/demo"),
+      createConfig({
+        sources: {
+          subscriptions: [
+            { url: `https://app.example.com/s/${first.id}`, prefix: "节点A" },
+            { url: `https://app.example.com/s/${second.id}`, prefix: "节点B" }
+          ],
+          nodes: []
+        }
+      })
+    );
+
+    expect(result.yaml).toContain("节点A Alpha");
+    expect(result.yaml).toContain("节点B Beta");
+    expect(subscriptionCache.fetchSubscription).not.toHaveBeenCalled();
+  });
+
+  it("同域短链循环引用会直接返回 422", async () => {
+    const env = createEnv();
+    const linkA = await createLink(
+      env,
+      createConfig({
+        sources: {
+          subscriptions: [],
+          nodes: ["ss://YWVzLTI1Ni1nY206cGFzc0BleGFtcGxlLmNvbTo4NDQz#SeedA"]
+        }
+      })
+    );
+    const linkB = await createLink(
+      env,
+      createConfig({
+        sources: {
+          subscriptions: [{ url: `https://app.example.com/s/${linkA.id}`, prefix: "B" }],
+          nodes: []
+        }
+      })
+    );
+
+    await updateLink(
+      env,
+      linkA.id,
+      createConfig({
+        sources: {
+          subscriptions: [{ url: `https://app.example.com/s/${linkB.id}`, prefix: "A" }],
+          nodes: []
+        }
+      })
+    );
+
+    await expect(
+      renderLink(env, new Request(`https://app.example.com/s/${linkA.id}`), linkA.id)
+    ).rejects.toMatchObject({
+      status: 422,
+      message: "检测到订阅链接循环引用",
+      details: `https://app.example.com/s/${linkA.id}`
+    });
+    expect(subscriptionCache.fetchSubscription).not.toHaveBeenCalled();
   });
 });

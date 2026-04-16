@@ -20,12 +20,58 @@ function isBase64Like(value) {
   return /^[A-Za-z0-9+/=_-]+$/.test(value);
 }
 
+function isShadowsocks2022Cipher(cipher) {
+  return String(cipher || "").startsWith("2022-");
+}
+
+function decodeUrlComponentSafe(value) {
+  if (!value) {
+    return value;
+  }
+
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function boolFromQuery(value) {
   return value === "1" || value === "true";
 }
 
+function optionalBoolFromQuery(value) {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+  return boolFromQuery(value);
+}
+
+function resolveUdp(queryValue, options = {}) {
+  const fromQuery = optionalBoolFromQuery(queryValue);
+  if (fromQuery !== undefined) {
+    return fromQuery;
+  }
+
+  return options.useUDP ? true : undefined;
+}
+
+function buildUdpField(queryValue, options = {}) {
+  const udp = resolveUdp(queryValue, options);
+  return udp === undefined ? {} : { udp };
+}
+
 function getNameFromUrl(link) {
   return decodeURIComponent(link.hash.replace(/^#/, "")) || `${link.hostname}:${link.port}`;
+}
+
+function splitOnce(value, separator) {
+  const index = value.indexOf(separator);
+  if (index === -1) {
+    return [value, ""];
+  }
+
+  return [value.slice(0, index), value.slice(index + separator.length)];
 }
 
 function parseShadowsocks(proxy, options) {
@@ -37,21 +83,21 @@ function parseShadowsocks(proxy, options) {
   }
 
   const link = new URL(source);
-  let cipher = link.username;
-  let password = link.password;
+  let cipher = decodeUrlComponentSafe(link.username);
+  let password = decodeUrlComponentSafe(link.password);
 
   if (!password && isBase64Like(cipher)) {
     const decoded = decodeBase64Loose(cipher);
-    const [decodedCipher, decodedPassword = ""] = decoded.split(":");
+    const [decodedCipher, decodedPassword = ""] = splitOnce(decoded, ":");
     cipher = decodedCipher;
     password = decodedPassword;
   }
 
-  if (password && isBase64Like(password)) {
+  if (password && isBase64Like(password) && !isShadowsocks2022Cipher(cipher)) {
     try {
       password = decodeBase64Loose(password);
     } catch {
-      password = link.password;
+      password = decodeUrlComponentSafe(link.password);
     }
   }
 
@@ -62,7 +108,7 @@ function parseShadowsocks(proxy, options) {
     port: parsePort(link.port),
     password,
     cipher,
-    udp: Boolean(options.useUDP)
+    ...buildUdpField(undefined, options)
   };
 }
 
@@ -100,7 +146,7 @@ function parseShadowsocksR(proxy, options) {
     "protocol-param": params.get("protoparam")
       ? decodeBase64Loose(params.get("protoparam"))
       : undefined,
-    udp: Boolean(options.useUDP)
+    ...buildUdpField(undefined, options)
   };
 }
 
@@ -114,7 +160,7 @@ function parseVmess(proxy, options) {
     uuid: decoded.id,
     alterId: Number(decoded.aid || 0),
     cipher: decoded.scy || "auto",
-    udp: Boolean(options.useUDP)
+    ...buildUdpField(undefined, options)
   };
 
   if (decoded.tls === "tls") {
@@ -165,7 +211,7 @@ function parseVless(proxy, options) {
     port: parsePort(link.port),
     uuid: link.username,
     flow: query.get("flow") || undefined,
-    udp: boolFromQuery(query.get("udp")) || Boolean(options.useUDP)
+    ...buildUdpField(query.get("udp"), options)
   };
 
   if (query.get("security") === "tls" || query.get("security") === "reality") {
@@ -231,7 +277,7 @@ function parseTrojan(proxy, options) {
     server: link.hostname,
     port: parsePort(link.port),
     password: link.username,
-    udp: boolFromQuery(query.get("udp")) || Boolean(options.useUDP)
+    ...buildUdpField(query.get("udp"), options)
   };
 
   if (query.get("alpn")) {
@@ -298,9 +344,9 @@ function parseHysteria2(proxy) {
     name: getNameFromUrl(link),
     server: link.hostname,
     port: parsePort(link.port),
-    password: link.password || link.username,
+    password: decodeUrlComponentSafe(link.password || link.username),
     obfs: query.get("obfs") || undefined,
-    "obfs-password": query.get("obfs-password") || undefined,
+    "obfs-password": decodeUrlComponentSafe(query.get("obfs-password")) || undefined,
     sni: query.get("sni") || undefined,
     "skip-cert-verify": boolFromQuery(query.get("insecure"))
   };
@@ -330,7 +376,7 @@ function parseSocks(proxy, options) {
     username: username || undefined,
     password: password || undefined,
     tls: boolFromQuery(link.searchParams.get("tls")),
-    udp: boolFromQuery(link.searchParams.get("udp")) || Boolean(options.useUDP)
+    ...buildUdpField(link.searchParams.get("udp"), options)
   };
 }
 
@@ -345,7 +391,7 @@ function parseAnytls(proxy, options) {
     password: link.password || link.username,
     sni: query.get("sni") || undefined,
     "skip-cert-verify": boolFromQuery(query.get("insecure")),
-    udp: Boolean(options.useUDP)
+    ...buildUdpField(undefined, options)
   };
 }
 

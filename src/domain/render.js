@@ -3,6 +3,7 @@ import YAML from "yaml";
 import { getLink } from "../data/link-repository.js";
 import { fetchSubscription, getCachedSubscription, putCachedSubscription } from "../data/subscription-cache.js";
 import { findCustomTemplate } from "../data/settings-repository.js";
+import { decodeBase64UrlText } from "../utils/base64url.js";
 import { sha256Hex } from "../utils/crypto.js";
 import { badRequest, notFound, unprocessable } from "../utils/errors.js";
 import { deepClean, stableStringify } from "../utils/object.js";
@@ -13,6 +14,118 @@ import { filterSupportedProxies, parseProxyLink, parseSubscriptionBody } from ".
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function createRenderContext(context) {
+  if (context?.activeLocalSubscriptionUrls instanceof Set) {
+    return context;
+  }
+
+  return {
+    activeLocalSubscriptionUrls: new Set()
+  };
+}
+
+function getTrackedLocalSubscriptionUrl(request) {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/s/") && !url.pathname.startsWith("/sub/")) {
+    return null;
+  }
+  return url.toString();
+}
+
+async function withActiveLocalSubscription(context, request, callback) {
+  const currentUrl = getTrackedLocalSubscriptionUrl(request);
+  if (!currentUrl) {
+    return callback();
+  }
+
+  if (context.activeLocalSubscriptionUrls.has(currentUrl)) {
+    throw unprocessable("检测到订阅链接循环引用", currentUrl);
+  }
+
+  context.activeLocalSubscriptionUrls.add(currentUrl);
+  try {
+    return await callback();
+  } finally {
+    context.activeLocalSubscriptionUrls.delete(currentUrl);
+  }
+}
+
+function getPathToken(pathname, prefix) {
+  if (!pathname.startsWith(prefix)) {
+    return null;
+  }
+
+  const tail = pathname.slice(prefix.length);
+  if (!tail || tail.includes("/")) {
+    return null;
+  }
+
+  return tail;
+}
+
+function resolveLocalSubscriptionTarget(request, subscriptionUrl) {
+  const currentUrl = new URL(request.url);
+  const targetUrl = new URL(subscriptionUrl, currentUrl);
+  if (targetUrl.origin !== currentUrl.origin) {
+    return null;
+  }
+
+  const shortId = getPathToken(targetUrl.pathname, "/s/");
+  if (shortId) {
+    return {
+      type: "short",
+      targetUrl,
+      id: shortId
+    };
+  }
+
+  const payload = getPathToken(targetUrl.pathname, "/sub/");
+  if (payload) {
+    return {
+      type: "long",
+      targetUrl,
+      payload
+    };
+  }
+
+  return null;
+}
+
+function createInternalRequest(request, targetUrl) {
+  return new Request(targetUrl.toString(), {
+    method: "GET",
+    headers: request.headers
+  });
+}
+
+async function resolveLocalSubscription(env, request, subscriptionUrl, context) {
+  const localTarget = resolveLocalSubscriptionTarget(request, subscriptionUrl);
+  if (!localTarget) {
+    return null;
+  }
+
+  const targetUrl = localTarget.targetUrl.toString();
+  if (context.activeLocalSubscriptionUrls.has(targetUrl)) {
+    throw unprocessable("检测到订阅链接循环引用", targetUrl);
+  }
+
+  const localRequest = createInternalRequest(request, localTarget.targetUrl);
+  const result =
+    localTarget.type === "short"
+      ? await renderLink(env, localRequest, localTarget.id, context)
+      : await renderConfig(
+          env,
+          localRequest,
+          JSON.parse(decodeBase64UrlText(localTarget.payload)),
+          context
+        );
+
+  return {
+    body: result.yaml,
+    subscriptionUserinfo: result.subscriptionUserinfo || ""
+  };
 }
 
 async function loadTemplate(env, request, config) {
@@ -241,7 +354,7 @@ function mergeTemplate(templateContent, proxies, countryGroups, config) {
   return deepClean(next);
 }
 
-async function collectRemoteProxies(env, config) {
+async function collectRemoteProxies(env, request, config, context) {
   const result = [];
   let subscriptionUserinfo = "";
 
@@ -255,11 +368,13 @@ async function collectRemoteProxies(env, config) {
     }
 
     if (!payload) {
-      payload = await fetchSubscription(env, subscription.url, {
-        userAgent: config.options.userAgent,
-        retries: 2,
-        noStore: config.options.refresh
-      });
+      payload =
+        (await resolveLocalSubscription(env, request, subscription.url, context)) ||
+        (await fetchSubscription(env, subscription.url, {
+          userAgent: config.options.userAgent,
+          retries: 2,
+          noStore: config.options.refresh
+        }));
       if (!config.options.refresh) {
         await putCachedSubscription(env, hash, payload);
       }
@@ -283,25 +398,43 @@ function collectInlineProxies(config) {
   return config.sources.nodes.map((node) => parseProxyLink(node, config.options));
 }
 
-export async function renderConfig(env, request, inputConfig) {
-  const config = validateAndNormalizeConfig(inputConfig);
-  const template = await loadTemplate(env, request, config);
-  const remote = await collectRemoteProxies(env, config);
-  const inline = collectInlineProxies(config);
+export async function renderConfig(env, request, inputConfig, context) {
+  const renderContext = createRenderContext(context);
 
-  let proxies = [...remote.proxies, ...inline];
-  proxies = filterSupportedProxies(proxies, config.target);
-  proxies = dedupeProxies(proxies);
-  proxies = applyFilterAndReplace(proxies, config);
+  return withActiveLocalSubscription(renderContext, request, async () => {
+    const config = validateAndNormalizeConfig(inputConfig);
+    const template = await loadTemplate(env, request, config);
+    const remote = await collectRemoteProxies(env, request, config, renderContext);
+    const inline = collectInlineProxies(config);
 
-  const countryGroups = buildCountryGroups(proxies, config.options);
+    let proxies = [...remote.proxies, ...inline];
+    proxies = filterSupportedProxies(proxies, config.target);
+    proxies = dedupeProxies(proxies);
+    proxies = applyFilterAndReplace(proxies, config);
 
-  if (config.options.nodeList) {
-    const yaml = YAML.stringify(
-      deepClean({
-        proxies
-      })
-    );
+    const countryGroups = buildCountryGroups(proxies, config.options);
+
+    if (config.options.nodeList) {
+      const yaml = YAML.stringify(
+        deepClean({
+          proxies
+        })
+      );
+      return {
+        yaml,
+        stats: {
+          proxyCount: proxies.length,
+          countryGroupCount: countryGroups.length,
+          templateId: template.id
+        },
+        warnings: [],
+        subscriptionUserinfo: remote.subscriptionUserinfo
+      };
+    }
+
+    const merged = mergeTemplate(template.content, proxies, countryGroups, config);
+    const yaml = YAML.stringify(merged);
+
     return {
       yaml,
       stats: {
@@ -312,24 +445,10 @@ export async function renderConfig(env, request, inputConfig) {
       warnings: [],
       subscriptionUserinfo: remote.subscriptionUserinfo
     };
-  }
-
-  const merged = mergeTemplate(template.content, proxies, countryGroups, config);
-  const yaml = YAML.stringify(merged);
-
-  return {
-    yaml,
-    stats: {
-      proxyCount: proxies.length,
-      countryGroupCount: countryGroups.length,
-      templateId: template.id
-    },
-    warnings: [],
-    subscriptionUserinfo: remote.subscriptionUserinfo
-  };
+  });
 }
 
-export async function renderLink(env, request, id) {
+export async function renderLink(env, request, id, context) {
   const record = await getLink(env, id);
-  return renderConfig(env, request, record.config);
+  return renderConfig(env, request, record.config, context);
 }
