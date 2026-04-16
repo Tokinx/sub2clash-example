@@ -8,6 +8,13 @@
 本项目基于 <a href="https://github.com/bestnite/sub2clash" target="_blank">bestnite/sub2clash</a>，90% 由 AI 重新开发
 </div>
 
+## 演示
+```
+演示地址：https://sub2clash-example.tokin.workers.dev
+演示密码：eXample123456
+！！！演示站点请勿提交敏感信息，演示站点进攻界面与功能展示，随时关闭！！！
+```
+
 ## 界面预览
 
 ![SnapShort](./snapshort.png)
