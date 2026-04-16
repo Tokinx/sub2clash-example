@@ -1,0 +1,37 @@
+{
+  "name": "sub2clash-example",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "cd frontend && bun run dev",
+    "dev:worker": "wrangler dev --config wrangler.local.jsonc",
+    "dev:frontend": "cd frontend && bun run dev",
+    "build": "bun run build:frontend",
+    "build:frontend": "cd frontend && bun run build",
+    "clean:public": "bun run scripts/prepare-public.mjs",
+    "build:deploy": "bun run clean:public && bun run build:frontend",
+    "deploy": "bun run build:deploy && wrangler deploy --config wrangler.jsonc",
+    "deploy:dry-run": "bun run build:deploy && wrangler deploy --config wrangler.jsonc --dry-run",
+    "deploy:keep-vars": "bun run build:deploy && wrangler deploy --config wrangler.jsonc --keep-vars",
+    "test": "bun run test:worker && bun run test:frontend",
+    "test:worker": "vitest run",
+    "test:worker:watch": "vitest",
+    "test:frontend": "cd frontend && bun run test",
+    "test:frontend:watch": "cd frontend && bun run test:watch",
+    "test:watch": "bun run test:worker:watch",
+    "check": "bun run test"
+  },
+  "dependencies": {
+    "cookie": "^1.0.2",
+    "hono": "^4.7.7",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.32",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.13.2"
+  }
+}

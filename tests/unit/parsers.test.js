@@ -1,0 +1,134 @@
+import { describe, expect, it } from "vitest";
+
+import { parseProxyLink } from "../../src/domain/parsers/index.js";
+
+const PLACEHOLDER_SS2022_PSK = "cGxhY2Vob2xkZXItc2luZ2xlLWtleQ==";
+const PLACEHOLDER_SS2022_UPSK = "cGxhY2Vob2xkZXItdXBzaw==";
+const PLACEHOLDER_SS2022_IPSK = "cGxhY2Vob2xkZXItaXBzaw==";
+const PLACEHOLDER_HY2_PASSWORD = "cGxhY2Vob2xkZXItaHkyLXBhc3M=";
+const PLACEHOLDER_HY2_OBFS_PASSWORD = "cGxhY2Vob2xkZXItaHkyLW9iZnM=";
+
+function encodeBase64(text) {
+  return Buffer.from(text).toString("base64");
+}
+
+describe("协议解析器", () => {
+  const cases = [
+    [
+      "ss",
+      "ss://YWVzLTI1Ni1nY206cGFzc0BleGFtcGxlLmNvbTo4NDQz#SS",
+      "ss"
+    ],
+    [
+      "ssr",
+      "ssr://ZXhhbXBsZS5jb206ODM4ODphdXRoX2FlczEyOF9tZDU6YWVzLTI1Ni1nY206cGxhaW46Y0dGemN3Lz9yZW1hcmtzPVUxTlM",
+      "ssr"
+    ],
+    [
+      "vmess",
+      "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MiLCJhZGQiOiJleGFtcGxlLmNvbSIsInBvcnQiOiI0NDMiLCJpZCI6IjEyMzQ1Njc4LTEyMzQtMTIzNC0xMjM0LTEyMzQ1Njc4OTBhYiIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJ0eXBlIjoiIiwiaG9zdCI6ImV4YW1wbGUuY29tIiwicGF0aCI6Ii93cyIsInRscyI6InRscyJ9",
+      "vmess"
+    ],
+    [
+      "vless",
+      "vless://12345678-1234-1234-1234-1234567890ab@example.com:443?type=ws&security=tls&host=example.com&path=%2Fws#VLESS",
+      "vless"
+    ],
+    [
+      "trojan",
+      "trojan://secret@example.com:443?type=ws&host=example.com&path=%2Ftrojan#Trojan",
+      "trojan"
+    ],
+    [
+      "hysteria",
+      "hysteria://example.com:443?upmbps=20&downmbps=100&obfs=salamander#Hysteria",
+      "hysteria"
+    ],
+    [
+      "hysteria2",
+      "hysteria2://password@example.com:443?sni=example.com#Hysteria2",
+      "hysteria2"
+    ],
+    [
+      "socks5",
+      "socks5://user:pass@example.com:1080#Socks",
+      "socks5"
+    ],
+    [
+      "anytls",
+      "anytls://password@example.com:443?sni=example.com#AnyTLS",
+      "anytls"
+    ]
+  ];
+
+  it.each(cases)("可以解析 %s 分享链接", (_, source, expectedType) => {
+    const proxy = parseProxyLink(source, { useUDP: true });
+    expect(proxy.type).toBe(expectedType);
+    expect(proxy.name).not.toBe("");
+  });
+
+  it("页面未开启 UDP 时，不主动写入 udp: false", () => {
+    const proxy = parseProxyLink(
+      "ss://YWVzLTI1Ni1nY206cGFzc0BleGFtcGxlLmNvbTo4NDQz#SS",
+      { useUDP: false }
+    );
+
+    expect(proxy).not.toHaveProperty("udp");
+  });
+
+  it("页面开启 UDP 时，会显式写入 udp: true", () => {
+    const proxy = parseProxyLink(
+      "ss://YWVzLTI1Ni1nY206cGFzc0BleGFtcGxlLmNvbTo4NDQz#SS",
+      { useUDP: true }
+    );
+
+    expect(proxy.udp).toBe(true);
+  });
+
+  it("链接里显式携带 udp 参数时，保留其布尔值", () => {
+    const enabled = parseProxyLink(
+      "vless://12345678-1234-1234-1234-1234567890ab@example.com:443?type=ws&security=tls&host=example.com&path=%2Fws&udp=1#VLESS",
+      { useUDP: false }
+    );
+    const disabled = parseProxyLink(
+      "vless://12345678-1234-1234-1234-1234567890ab@example.com:443?type=ws&security=tls&host=example.com&path=%2Fws&udp=false#VLESS",
+      { useUDP: false }
+    );
+
+    expect(enabled.udp).toBe(true);
+    expect(disabled.udp).toBe(false);
+  });
+
+  it("ss-2022 密码保持 base64 原样，不做二次解码", () => {
+    const proxy = parseProxyLink(
+      `ss://2022-blake3-aes-256-gcm:${encodeURIComponent(PLACEHOLDER_SS2022_PSK)}@example.com:20507#SS2022`,
+      { useUDP: false }
+    );
+
+    expect(proxy.cipher).toBe("2022-blake3-aes-256-gcm");
+    expect(proxy.password).toBe(PLACEHOLDER_SS2022_PSK);
+  });
+
+  it("ss-2022 使用 base64(method:password) 形式时保留双段 key", () => {
+    const encodedUserInfo = encodeBase64(
+      `2022-blake3-aes-256-gcm:${PLACEHOLDER_SS2022_UPSK}:${PLACEHOLDER_SS2022_IPSK}`
+    );
+    const proxy = parseProxyLink(
+      `ss://${encodedUserInfo}@example.com:1043#SS2022-Double`,
+      { useUDP: false }
+    );
+
+    expect(proxy.cipher).toBe("2022-blake3-aes-256-gcm");
+    expect(proxy.password).toBe(`${PLACEHOLDER_SS2022_UPSK}:${PLACEHOLDER_SS2022_IPSK}`);
+  });
+
+  it("hysteria2 的 password 和 obfs-password 会做 URL decode", () => {
+    const proxy = parseProxyLink(
+      `hysteria2://${encodeURIComponent(PLACEHOLDER_HY2_PASSWORD)}@example.com:443?obfs=salamander&obfs-password=${encodeURIComponent(PLACEHOLDER_HY2_OBFS_PASSWORD)}&sni=example.com#Hysteria2-Encoded`,
+      { useUDP: false }
+    );
+
+    expect(proxy.password).toBe(PLACEHOLDER_HY2_PASSWORD);
+    expect(proxy["obfs-password"]).toBe(PLACEHOLDER_HY2_OBFS_PASSWORD);
+  });
+});

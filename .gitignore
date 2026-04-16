@@ -1,0 +1,8 @@
+node_modules
+.wrangler
+coverage
+public/
+.DS_Store
+bun.lock
+.dev.vars
+wrangler.local.jsonc
