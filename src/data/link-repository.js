@@ -8,6 +8,20 @@ function validateId(id) {
   }
 }
 
+function buildLinkSummary(record) {
+  return {
+    id: record.id,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt
+  };
+}
+
+async function putLinkRecord(env, record) {
+  await env.CACHE.put(buildLinkKey(record.id), JSON.stringify(record), {
+    metadata: buildLinkSummary(record)
+  });
+}
+
 export async function createLink(env, config) {
   const id = randomId(20);
   validateId(id);
@@ -24,8 +38,26 @@ export async function createLink(env, config) {
     createdAt: now,
     updatedAt: now
   };
-  await env.CACHE.put(key, JSON.stringify(record));
+  await putLinkRecord(env, record);
   return record;
+}
+
+export async function listLinks(env) {
+  const listed = await env.CACHE.list({ prefix: buildLinkKey("") });
+  const records = await Promise.all(
+    listed.keys.map(async (item) => {
+      if (item.metadata?.id && item.metadata?.createdAt && item.metadata?.updatedAt) {
+        return item.metadata;
+      }
+
+      const record = await env.CACHE.get(item.name, "json");
+      return record ? buildLinkSummary(record) : null;
+    })
+  );
+
+  return records
+    .filter(Boolean)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 export async function getLink(env, id) {
@@ -44,7 +76,7 @@ export async function updateLink(env, id, config) {
     config,
     updatedAt: new Date().toISOString()
   };
-  await env.CACHE.put(buildLinkKey(id), JSON.stringify(nextRecord));
+  await putLinkRecord(env, nextRecord);
   return nextRecord;
 }
 

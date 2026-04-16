@@ -103,6 +103,26 @@ describe("worker api", () => {
     expect(link.id).not.toBe("manual-id");
     expect(link.id).toHaveLength(20);
 
+    const linksResponse = await app.request(
+      "https://app.example.com/api/links",
+      {
+        headers: { cookie }
+      },
+      env
+    );
+    expect(linksResponse.status).toBe(200);
+    const linksData = await linksResponse.json();
+    expect(linksData.links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: link.id,
+          createdAt: link.createdAt,
+          updatedAt: link.updatedAt
+        })
+      ])
+    );
+    expect(linksData.links[0]).not.toHaveProperty("config");
+
     const renderResponse = await app.request(
       "https://app.example.com/s/" + link.id,
       {},

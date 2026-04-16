@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { requireSession } from "../auth/middleware.js";
 import { verifyPassword } from "../auth/password.js";
 import { clearSessionCookie, createSessionCookie, getSessionFromRequest } from "../auth/session.js";
-import { createLink, deleteLink, getLink, updateLink } from "../data/link-repository.js";
+import { createLink, deleteLink, getLink, listLinks, updateLink } from "../data/link-repository.js";
 import {
   createTemplate,
   deleteTemplate,
@@ -77,6 +77,11 @@ export function createApiRouter() {
     const body = await c.req.json();
     const link = await createLink(c.env, body.config);
     return c.json(link, 201);
+  });
+
+  protectedApi.get("/links", async (c) => {
+    const links = await listLinks(c.env);
+    return c.json({ links });
   });
 
   protectedApi.get("/links/:id", async (c) => {

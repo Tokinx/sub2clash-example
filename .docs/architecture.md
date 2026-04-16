@@ -11,7 +11,7 @@
 ## 前端分层
 
 - `frontend/src/components/ui`：`shadcn/ui` 生成的基础 primitive，仅承载通用交互与无障碍能力
-- `frontend/src/components/dashboard`：配置器领域组合组件，如表格编辑器、预览弹窗、自动补全输入
+- `frontend/src/components/dashboard`：配置器领域组合组件，如表格编辑器、预览弹窗、短链接自动补全输入
 - `frontend/src/components`：壳层与少量品牌化组合组件，不新增第二套基础 UI primitive
 - `frontend/src/pages`：页面只保留状态、派生数据、路由与 API 编排，不再内嵌复杂控件实现
 
@@ -19,6 +19,11 @@
 
 - `settings`：全局设置与自建模板
 - `link:{id}`：短链配置
+
+## 短链目录
+
+- 管理台通过 `GET /api/links` 拉取短链摘要列表，仅返回 `id`、时间戳等目录信息
+- 配置器导入区基于该目录做 autocomplete，仍允许用户粘贴任意 `/sub/:payload` 或 `/s/:id` 链接
 
 ## 安全模型
 

@@ -191,3 +191,23 @@
   - `DashboardPage` 虽已拆出编辑器组件，但仍有进一步下沉分享区与选项区的空间
   - 前端测试以行为回归为主，尚未加入浏览器截图级视觉回归
   - jsdom 环境在 Shell 登出路径上仍会打印一次 `navigation to another Document` 提示，但不影响浏览器中的真实行为
+
+## 短链自动补全回归 2026-04-16 13:17 CST
+
+- 状态：已完成
+- 目标：将 Dashboard 导入输入升级为可搜索的短链 autocomplete，同时保留手动输入 `/sub/*` 与 `/s/*`
+- 变更：
+  - 新增 `GET /api/links`，短链列表仅返回 `id`、`createdAt`、`updatedAt` 摘要，不暴露完整配置
+  - `DashboardPage` 顶部导入区改为 autocomplete，下拉展示已生成短链接，仍支持用户自定义输入并解析相对路径
+  - 短链创建、更新、删除后会同步刷新前端短链目录状态，分享区按钮补充更明确的无障碍名称
+  - Dashboard 表格编辑区补齐“新增订阅 / 新增 Rule Provider / 新增规则 / 新增替换规则”按钮文本
+- 测试：
+  - `bun run build:frontend`
+  - `bun run test`
+- 结果：
+  - Worker 侧 4 个测试文件、16 个测试用例通过
+  - 前端 4 个测试文件、7 个测试用例通过
+  - 根测试链路通过，短链导入、生成、复制与预览行为均完成回归
+- 现存风险：
+  - 当前短链目录来自 KV `list`，条目数量继续增长时仍需考虑分页或最近使用裁剪
+  - jsdom 仍会在 Shell 登出测试中打印一次 `navigation to another Document` 提示，但不影响浏览器真实行为

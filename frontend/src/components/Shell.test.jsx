@@ -27,7 +27,7 @@ describe("Shell", () => {
       { route: "/templates" }
     );
 
-    expect(screen.getByRole("link", { name: /模板管理/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /^模板$/i })).toHaveAttribute("aria-current", "page");
 
     await user.click(screen.getByRole("button", { name: /退出/i }));
 

@@ -42,22 +42,43 @@ class MemoryKV {
   }
 
   async get(key, type) {
-    const value = this.map.get(key);
-    if (value === undefined) {
+    const entry = this.map.get(key);
+    if (entry === undefined) {
       return null;
     }
+    const value = entry.value;
     if (type === "json") {
       return JSON.parse(value);
     }
     return value;
   }
 
-  async put(key, value) {
-    this.map.set(key, String(value));
+  async put(key, value, options = {}) {
+    this.map.set(key, {
+      value: String(value),
+      metadata: options.metadata ?? null
+    });
   }
 
   async delete(key) {
     this.map.delete(key);
+  }
+
+  async list(options = {}) {
+    const prefix = options.prefix || "";
+    const keys = [...this.map.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, entry]) => ({
+        name,
+        metadata: entry.metadata ?? null
+      }));
+
+    return {
+      keys,
+      list_complete: true,
+      cursor: ""
+    };
   }
 }
 

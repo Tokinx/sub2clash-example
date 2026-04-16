@@ -38,7 +38,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByDisplayValue("内置模板")).toBeDisabled();
     expect(screen.getByRole("button", { name: /保存模板/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /格式化模板/i })).toBeDisabled();
-    expect(screen.getByRole("textbox", { name: /模板内容/i })).toHaveValue("内置模板内容由系统提供，不能直接编辑。");
+    expect(screen.getByRole("textbox", { name: /模板内容/i })).toHaveAttribute("readonly");
     expect(screen.queryByText(/当前选择的是内置模板/)).not.toBeInTheDocument();
   });
 

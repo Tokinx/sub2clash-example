@@ -98,16 +98,16 @@ function IconActionButton({ label, onClick, disabled = false, tone = "destructiv
   );
 }
 
-function AddRowButton({ label, onClick }) {
+function AddRowButton({ ariaLabel, onClick }) {
   return (
     <Button
       type="button"
       variant="secondary"
+      aria-label={ariaLabel}
       className="w-full h-8 flex bg-transparent text-amber-800/50 hover:bg-amber-800/5 active:bg-amber-800/10"
       onClick={onClick}
     >
       <Plus className="h-4 w-4" />
-      {label && <span>{label}</span>}
     </Button>
   );
 }
@@ -123,8 +123,16 @@ function CompactSwitch({ label, checked, onCheckedChange }) {
 function BehaviorCombobox({ value, onChange, placeholder = "选择或输入行为", ariaLabel = "行为" }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value || "");
+  const [activeValue, setActiveValue] = useState("");
   const [contentWidth, setContentWidth] = useState(null);
   const wrapperRef = useRef(null);
+  const suppressAutoSelectionRef = useRef(false);
+
+  function preventAnchorDismiss(event) {
+    if (wrapperRef.current?.contains(event.target)) {
+      event.preventDefault();
+    }
+  }
 
   useEffect(() => {
     setQuery(value || "");
@@ -138,21 +146,63 @@ function BehaviorCombobox({ value, onChange, placeholder = "选择或输入行�
     setContentWidth(wrapperRef.current.getBoundingClientRect().width);
   }, [open]);
 
-  const filteredOptions = useMemo(() => {
+  useEffect(() => {
+    const selectedOption = RULE_PROVIDER_BEHAVIOR_OPTIONS.find((option) => option.value === value);
+    setActiveValue(selectedOption?.value || "");
+  }, [value]);
+
+  useEffect(() => {
+    const selectedOption = RULE_PROVIDER_BEHAVIOR_OPTIONS.find((option) => option.value === value);
+    if (!open || selectedOption) {
+      suppressAutoSelectionRef.current = false;
+      return;
+    }
+
+    suppressAutoSelectionRef.current = true;
+    const timer = window.setTimeout(() => {
+      suppressAutoSelectionRef.current = false;
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      suppressAutoSelectionRef.current = false;
+    };
+  }, [open, value]);
+
+  const orderedOptions = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) {
       return RULE_PROVIDER_BEHAVIOR_OPTIONS;
     }
 
-    return RULE_PROVIDER_BEHAVIOR_OPTIONS.filter((option) =>
-      [option.label, option.value].some((item) => item.toLowerCase().includes(keyword)),
-    );
+    const matched = [];
+    const rest = [];
+
+    RULE_PROVIDER_BEHAVIOR_OPTIONS.forEach((option) => {
+      const isMatched = [option.label, option.value].some((item) => item.toLowerCase().includes(keyword));
+      if (isMatched) {
+        matched.push(option);
+        return;
+      }
+
+      rest.push(option);
+    });
+
+    return [...matched, ...rest];
   }, [query]);
 
   function handleInputChange(nextValue) {
     setQuery(nextValue);
     onChange(nextValue);
     setOpen(true);
+  }
+
+  function handleActiveValueChange(nextValue) {
+    if (suppressAutoSelectionRef.current) {
+      return;
+    }
+
+    setActiveValue(nextValue);
   }
 
   return (
@@ -183,14 +233,16 @@ function BehaviorCombobox({ value, onChange, placeholder = "选择或输入行�
       <PopoverContent
         align="start"
         sideOffset={6}
-        className="p-0"
+        className="p-0 border-0"
         style={contentWidth ? { width: `${contentWidth}px` } : undefined}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onInteractOutside={preventAnchorDismiss}
       >
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} value={activeValue} onValueChange={handleActiveValueChange}>
           <CommandList>
-            {filteredOptions.length ? (
+            {orderedOptions.length ? (
               <CommandGroup>
-                {filteredOptions.map((option) => (
+                {orderedOptions.map((option) => (
                   <CommandItem
                     key={option.value}
                     value={option.value}
@@ -199,6 +251,7 @@ function BehaviorCombobox({ value, onChange, placeholder = "选择或输入行�
                       onChange(option.value);
                       setOpen(false);
                     }}
+                    className={cn("bg-transparent! hover:bg-[rgba(201,100,66,0.05)]!", option.value === value && "bg-[rgba(201,100,66,0.1)]!")}
                   >
                     <span className="flex-1">{option.label}</span>
                     {option.value === value ? <Check className="h-4 w-4 text-[var(--brand)]" /> : null}
@@ -270,7 +323,7 @@ export function SubscriptionEditor({ subscriptions, onChange }) {
         </Table>
       </TableFrame>
 
-      <AddRowButton onClick={() => onChange([...rows, createEmptySubscription()])} />
+      <AddRowButton ariaLabel="新增订阅" onClick={() => onChange([...rows, createEmptySubscription()])} />
     </div>
   );
 }
@@ -289,7 +342,7 @@ export function RuleProviderEditor({ providers, onChange }) {
               <TableHead>策略组</TableHead>
               <TableHead>行为</TableHead>
               <TableHead>URL</TableHead>
-              <TableHead className="w-[5rem] text-center">前置</TableHead>
+              <TableHead className="w-[5rem] text-center">置顶</TableHead>
               <TableHead className="w-[5rem] text-center">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -366,7 +419,7 @@ export function RuleProviderEditor({ providers, onChange }) {
         </Table>
       </TableFrame>
 
-      <AddRowButton onClick={() => onChange([...rows, createEmptyRuleProvider()])} />
+      <AddRowButton ariaLabel="新增 Rule Provider" onClick={() => onChange([...rows, createEmptyRuleProvider()])} />
     </div>
   );
 }
@@ -382,7 +435,7 @@ export function RulesEditor({ rules, onChange }) {
           <TableHeader>
             <TableRow>
               <TableHead>规则</TableHead>
-              <TableHead className="w-[5rem] text-center">前置</TableHead>
+              <TableHead className="w-[5rem] text-center">置顶</TableHead>
               <TableHead className="w-[5rem] text-center">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -403,7 +456,7 @@ export function RulesEditor({ rules, onChange }) {
                 </TableCell>
                 <TableCell className="text-center">
                   <CompactSwitch
-                    label="前置"
+                    label="置顶"
                     checked={Boolean(item.prepend)}
                     onCheckedChange={(checked) => {
                       const next = [...rows];
@@ -425,7 +478,7 @@ export function RulesEditor({ rules, onChange }) {
         </Table>
       </TableFrame>
 
-      <AddRowButton onClick={() => onChange([...rows, createEmptyRule()])} />
+      <AddRowButton ariaLabel="新增规则" onClick={() => onChange([...rows, createEmptyRule()])} />
     </div>
   );
 }
@@ -485,7 +538,7 @@ export function ReplacementEditor({ replacements, onChange }) {
         </Table>
       </TableFrame>
 
-      <AddRowButton onClick={() => onChange([...rows, createEmptyReplacement()])} />
+      <AddRowButton ariaLabel="新增替换规则" onClick={() => onChange([...rows, createEmptyReplacement()])} />
     </div>
   );
 }

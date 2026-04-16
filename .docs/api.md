@@ -21,6 +21,7 @@
 
 ## 短链
 
+- `GET /api/links`
 - `POST /api/links`
 - `GET /api/links/:id`
 - `PUT /api/links/:id`

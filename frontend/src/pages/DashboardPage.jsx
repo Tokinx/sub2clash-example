@@ -2,6 +2,7 @@ import { AlertCircle, Copy, Eye, Link2, RefreshCw, Search, Trash2 } from "lucide
 import { useEffect, useMemo, useState } from "react";
 
 import Field from "@/components/Field";
+import LinkAutocomplete from "@/components/dashboard/LinkAutocomplete.jsx";
 import PreviewDialog from "@/components/dashboard/PreviewDialog.jsx";
 import {
   EditorSection,
@@ -63,6 +64,8 @@ export default function DashboardPage({ templates }) {
   const [pageMessage, setPageMessage] = useState("");
   const [previewError, setPreviewError] = useState("");
   const [linkInput, setLinkInput] = useState("");
+  const [savedLinks, setSavedLinks] = useState([]);
+  const [savedLinksLoading, setSavedLinksLoading] = useState(false);
   const [shortLinkId, setShortLinkId] = useState("");
   const [subscriptionInfo, setSubscriptionInfo] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -99,6 +102,15 @@ export default function DashboardPage({ templates }) {
 
   const shortLink = shortLinkId ? `${window.location.origin}/s/${shortLinkId}` : "";
   const canCopyLongLink = longLink.length < LONG_LINK_SOFT_LIMIT;
+  const savedLinkOptions = useMemo(
+    () =>
+      savedLinks.map((item) => ({
+        ...item,
+        path: `/s/${item.id}`,
+        url: `${window.location.origin}/s/${item.id}`,
+      })),
+    [savedLinks],
+  );
 
   useEffect(() => {
     if (!templateOptions.length) {
@@ -118,6 +130,34 @@ export default function DashboardPage({ templates }) {
     }
   }, [config.template.mode, config.template.value, templateOptions]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSavedLinks() {
+      setSavedLinksLoading(true);
+      try {
+        const data = await apiFetch("/api/links");
+        if (!cancelled) {
+          setSavedLinks(Array.isArray(data.links) ? data.links : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setSavedLinks([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setSavedLinksLoading(false);
+        }
+      }
+    }
+
+    loadSavedLinks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function showSuccess(message) {
     setPageError("");
     setPageMessage(message);
@@ -126,6 +166,20 @@ export default function DashboardPage({ templates }) {
   function showError(message) {
     setPageMessage("");
     setPageError(message);
+  }
+
+  function upsertSavedLink(link) {
+    const summary = {
+      id: link.id,
+      createdAt: link.createdAt,
+      updatedAt: link.updatedAt,
+    };
+
+    setSavedLinks((current) =>
+      [...current.filter((item) => item.id !== summary.id), summary].sort((left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt),
+      ),
+    );
   }
 
   function updateTemplate(value) {
@@ -166,7 +220,13 @@ export default function DashboardPage({ templates }) {
 
   async function importLink() {
     try {
-      const url = new URL(linkInput.trim());
+      const rawInput = linkInput.trim();
+      if (!rawInput) {
+        showError("请输入待解析的链接。");
+        return;
+      }
+
+      const url = rawInput.startsWith("/") ? new URL(rawInput, window.location.origin) : new URL(rawInput);
 
       if (url.pathname.startsWith("/sub/")) {
         const payload = url.pathname.split("/").pop();
@@ -203,6 +263,7 @@ export default function DashboardPage({ templates }) {
         }),
       });
       setShortLinkId(data.id);
+      upsertSavedLink(data);
       showSuccess("短链接已生成");
     } catch (error) {
       showError(error.message || "生成短链接失败。");
@@ -215,10 +276,11 @@ export default function DashboardPage({ templates }) {
     }
 
     try {
-      await apiFetch(`/api/links/${shortLinkId}`, {
+      const link = await apiFetch(`/api/links/${shortLinkId}`, {
         method: "PUT",
         body: JSON.stringify({ config: effectiveConfig }),
       });
+      upsertSavedLink(link);
       showSuccess("短链接已更新");
     } catch (error) {
       showError(error.message || "更新短链接失败。");
@@ -235,6 +297,7 @@ export default function DashboardPage({ templates }) {
         method: "DELETE",
         body: JSON.stringify({}),
       });
+      setSavedLinks((current) => current.filter((item) => item.id !== shortLinkId));
       setShortLinkId("");
       showSuccess("短链接已删除");
     } catch (error) {
@@ -260,6 +323,17 @@ export default function DashboardPage({ templates }) {
     }
   }
 
+  //pageMessage 和 pageError 只会显示 5 秒
+  useEffect(() => {
+    if (pageMessage || pageError) {
+      const timer = setTimeout(() => {
+        setPageMessage("");
+        setPageError("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [pageMessage, pageError]);
+
   return (
     <>
       <div className="mx-auto max-w-6xl">
@@ -267,10 +341,12 @@ export default function DashboardPage({ templates }) {
           <section className="my-[5%]">
             <div className="grid gap-4 grid-cols-[minmax(0,1fr)_auto] items-end">
               <Field className="min-w-0">
-                <Input
+                <LinkAutocomplete
                   value={linkInput}
-                  placeholder="粘贴 /sub/... 或 /s/... 链接"
-                  onChange={(event) => setLinkInput(event.target.value)}
+                  options={savedLinkOptions}
+                  loading={savedLinksLoading}
+                  placeholder="选择或输入历史订阅链接"
+                  onChange={setLinkInput}
                 />
               </Field>
               <div className="flex flex-wrap gap-3">
@@ -282,13 +358,19 @@ export default function DashboardPage({ templates }) {
             </div>
 
             {pageMessage ? (
-              <Alert className="mt-4">
+              <Alert
+                className="fixed top-0 left-0 right-0 pt-6 pb-6 backdrop-blur-xs bg-linear-0 from-transparent to-white z-50 text-center justify-center"
+                variant="success"
+              >
                 <AlertDescription>{pageMessage}</AlertDescription>
               </Alert>
             ) : null}
 
             {pageError ? (
-              <Alert className="mt-4" variant="destructive">
+              <Alert
+                className="fixed top-0 left-0 right-0 pt-6 pb-6 backdrop-blur-xs bg-transparent! bg-linear-0 from-transparent to-primary/30 z-50 text-center justify-center"
+                variant="destructive"
+              >
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{pageError}</AlertDescription>
               </Alert>
@@ -374,7 +456,7 @@ export default function DashboardPage({ templates }) {
               </Field>
             </div>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <OptionToggle
                 label="强制刷新订阅缓存"
                 description="启用后每次预览或生成链接都会向服务端请求最新渲染结果，适合调试订阅更新频率较高的配置。"
@@ -398,7 +480,7 @@ export default function DashboardPage({ templates }) {
                 }
               />
               <OptionToggle
-                label="Lazy 模式测速"
+                label="Lazy 模式"
                 description="启用后会在 Clash.Meta 中启用 Lazy url-test 模式，适合节点较多的用户。"
                 checked={Boolean(config.options.lazy)}
                 onCheckedChange={(value) =>
@@ -523,17 +605,29 @@ export default function DashboardPage({ templates }) {
             title="订阅链接"
             description="长链接会直接携带整个配置，超过长度限制时建议使用短链接"
           >
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
               <Field className="min-w-0">
                 <Input readOnly value={longLink} spellCheck={false} className="font-mono text-[0.84rem]" />
               </Field>
 
               <div className="flex flex-wrap items-center gap-3 xl:self-end">
-                <Button type="button" variant="secondary" className="whitespace-nowrap" onClick={copyLongLink}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="whitespace-nowrap"
+                  aria-label="复制长链接"
+                  onClick={copyLongLink}
+                >
                   <Copy className="h-4 w-4" />
                   <span>复制</span>
                 </Button>
-                <Button type="button" variant="secondary" className="whitespace-nowrap" onClick={renderCurrentConfig}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="whitespace-nowrap"
+                  aria-label="预览 YAML"
+                  onClick={renderCurrentConfig}
+                >
                   <Eye className="h-4 w-4" />
                   <span>预览</span>
                 </Button>
@@ -550,12 +644,12 @@ export default function DashboardPage({ templates }) {
 
             {shortLinkId ? (
               <div className="mt-5 border-t border-border pt-5">
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                   <Field label="当前短链" className="min-w-0">
                     <Input readOnly value={shortLink} className="font-mono text-[0.84rem]" />
                   </Field>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button type="button" variant="secondary" onClick={copyShortLink}>
+                    <Button type="button" variant="secondary" aria-label="复制短链接" onClick={copyShortLink}>
                       <Copy className="h-4 w-4" />
                       <span>复制</span>
                     </Button>

@@ -26,22 +26,70 @@ describe("DashboardPage", () => {
     });
   });
 
-  it("可以解析链接、生成短链并复制短链", async () => {
+  it("支持短链自动补全、自定义输入解析与短链复制", async () => {
     const user = userEvent.setup();
-    const config = createEmptyConfig();
-    config.sources.nodes = ["vmess://node-a"];
-    const longLink = `https://app.example.com/sub/${encodeConfigPayload(config)}`;
+    const importedShortConfig = createEmptyConfig();
+    importedShortConfig.sources.nodes = ["vmess://node-from-short"];
+    const longLinkConfig = createEmptyConfig();
+    longLinkConfig.sources.nodes = ["vmess://node-from-long"];
+    const longLink = `https://app.example.com/sub/${encodeConfigPayload(longLinkConfig)}`;
 
-    apiFetch.mockResolvedValueOnce({ id: "short-link-id" });
+    apiFetch
+      .mockResolvedValueOnce({
+        links: [
+          {
+            id: "saved-link-id",
+            createdAt: "2026-04-16T01:00:00.000Z",
+            updatedAt: "2026-04-16T02:00:00.000Z"
+          },
+          {
+            id: "saved-link-id-2",
+            createdAt: "2026-04-16T00:00:00.000Z",
+            updatedAt: "2026-04-16T01:30:00.000Z"
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        id: "saved-link-id",
+        config: importedShortConfig
+      })
+      .mockResolvedValueOnce({
+        id: "short-link-id",
+        createdAt: "2026-04-16T03:00:00.000Z",
+        updatedAt: "2026-04-16T03:00:00.000Z"
+      });
 
     render(<DashboardPage templates={templates} />);
-
-    fireEvent.change(screen.getByPlaceholderText("粘贴 /sub/... 或 /s/... 链接"), {
-      target: { value: longLink }
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledTimes(1);
     });
+
+    const linkInput = screen.getByRole("textbox", { name: /导入链接/i });
+    await user.click(linkInput);
+    expect(linkInput).toHaveFocus();
+    const firstHistoryOption = await screen.findByText("/s/saved-link-id");
+    expect(firstHistoryOption).toBeInTheDocument();
+    expect(screen.getByText("/s/saved-link-id-2")).toBeInTheDocument();
+    expect(firstHistoryOption.closest("[cmdk-item]")).toHaveAttribute("aria-selected", "false");
+    await user.click(await screen.findByText("/s/saved-link-id"));
+    expect(linkInput).toHaveValue("/s/saved-link-id");
+
+    await user.click(linkInput);
+    expect(linkInput).toHaveFocus();
+    expect(await screen.findByText("/s/saved-link-id")).toBeInTheDocument();
+    expect(screen.getByText("/s/saved-link-id-2")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /解析/i }));
 
-    expect(await screen.findByDisplayValue("vmess://node-a")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("vmess://node-from-short")).toBeInTheDocument();
+
+    fireEvent.change(linkInput, {
+      target: { value: longLink }
+    });
+    expect(await screen.findByText("/s/saved-link-id")).toBeInTheDocument();
+    expect(screen.getByText("/s/saved-link-id-2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /解析/i }));
+
+    expect(await screen.findByDisplayValue("vmess://node-from-long")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /生成短链接/i }));
 
@@ -54,24 +102,30 @@ describe("DashboardPage", () => {
   it("支持规则编辑、Behavior 选择和 YAML 预览", async () => {
     const user = userEvent.setup();
 
-    apiFetch.mockResolvedValueOnce({
-      yaml: "proxies: []\n",
-      stats: {
-        proxyCount: 0,
-        countryGroupCount: 0,
-        templateId: "meta-default"
-      },
-      warnings: ["示例告警"],
-      subscriptionUserinfo: "upload=1; download=2"
-    });
+    apiFetch
+      .mockResolvedValueOnce({ links: [] })
+      .mockResolvedValueOnce({
+        yaml: "proxies: []\n",
+        stats: {
+          proxyCount: 0,
+          countryGroupCount: 0,
+          templateId: "meta-default"
+        },
+        warnings: ["示例告警"],
+        subscriptionUserinfo: "upload=1; download=2"
+      });
 
     render(<DashboardPage templates={templates} />);
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
 
     await user.click(screen.getByRole("button", { name: /新增规则/i }));
     expect(screen.getAllByLabelText("规则")).toHaveLength(2);
 
     const behaviorInput = screen.getByLabelText("行为");
     await user.click(behaviorInput);
+    expect((await screen.findByText("classical")).closest("[cmdk-item]")).toHaveAttribute("aria-selected", "false");
     await user.type(behaviorInput, "dom");
     await user.click(await screen.findByText("domain"));
     expect(behaviorInput).toHaveValue("domain");

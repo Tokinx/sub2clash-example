@@ -56,3 +56,10 @@
 - 建立 `components/ui`、`components.json`、`@` alias、前端测试基座
 - 在保持 `DESIGN.md` 暖纸张与编辑部视觉语言的前提下重构登录页、配置器、模板页与弹窗交互
 - 状态：已完成
+
+## Phase 10
+
+- 为短链接增加管理侧列表接口，支撑配置器导入区的自动补全
+- 将 Dashboard 导入输入改为可搜索、可自定义输入的 autocomplete
+- 同步补 Worker 与前端回归，更新 API 与架构文档
+- 状态：已完成
