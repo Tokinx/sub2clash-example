@@ -15,6 +15,12 @@
       "!/assets/*"
     ]
   },
+  "secrets": {
+    "required": [
+      "APP_PASSWORD",
+      "SESSION_SECRET"
+    ]
+  },
   "kv_namespaces": [
     {
       "binding": "CACHE",
