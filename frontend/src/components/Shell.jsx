@@ -54,10 +54,10 @@ export default function Shell({ children }) {
       <main className="relative px-4 md:px-6">{children}</main>
 
       <footer className="border-t border-amber-800/5! px-4 py-6 md:px-6">
-        <div className="mx-auto max-w-6xl">
-          <p className="font-display text-sm text-muted-foreground">
-            © {new Date().getFullYear()} . Build with love on Cloudflare Workers
-          </p>
+        <div className="mx-auto max-w-6xl flex flex-col items-center sm:flex-row">
+          <p className="font-display text-sm text-muted-foreground">© {new Date().getFullYear()} . Sub2Clash</p>
+          <div className="flex-1"></div>
+          <p className="font-display text-sm text-muted-foreground">Build with <span className="text-primary">❤</span> on Cloudflare Workers</p>
         </div>
       </footer>
     </div>
