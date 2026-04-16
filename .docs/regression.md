@@ -211,3 +211,19 @@
 - 现存风险：
   - 当前短链目录来自 KV `list`，条目数量继续增长时仍需考虑分页或最近使用裁剪
   - jsdom 仍会在 Shell 登出测试中打印一次 `navigation to another Document` 提示，但不影响浏览器真实行为
+
+## 部署脚本回归 2026-04-16 15:10 CST
+
+- 状态：已完成
+- 目标：提供一键部署脚本，并在发布前清理旧的前端构建产物，避免 `public/assets` 长期堆积历史 hash 文件
+- 变更：
+  - 根目录新增 `clean:public`、`build:deploy`、`deploy`、`deploy:dry-run`、`deploy:keep-vars`
+  - 新增 `scripts/prepare-public.mjs`，仅清理 `public/index.html` 和 `public/assets/`
+  - README 部署说明改为优先使用 `bun run deploy*` 系列脚本
+- 测试：
+  - `bun run build:deploy`
+- 结果：
+  - 发布前可稳定清理旧前端产物，同时保留 `public/templates/`
+  - 一键部署入口已统一收口到根脚本，减少手动拼接构建与发布命令
+- 现存风险：
+  - `deploy:dry-run` 与 `deploy` 仍依赖真实 Cloudflare 认证、有效 KV Namespace ID 与已配置 secrets，无法在未登录环境下完成端到端验证

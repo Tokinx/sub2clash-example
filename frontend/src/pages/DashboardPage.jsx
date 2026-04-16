@@ -456,7 +456,7 @@ export default function DashboardPage({ templates }) {
               </Field>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-5 grid gap-[1px] sm:grid-cols-2 xl:grid-cols-3">
               <OptionToggle
                 label="强制刷新订阅缓存"
                 description="启用后每次预览或生成链接都会向服务端请求最新渲染结果，适合调试订阅更新频率较高的配置。"

@@ -36,8 +36,8 @@
 
 - Worker 入口已在 `src/index.js` 完成
 - API 路由已按认证与业务边界拆分
-- 内置模板由 `public/templates/` 静态托管
+- 内置模板由 `src/domain/builtin-templates.js` 直接提供，避免被静态资源 SPA fallback 污染
 - 前端构建产物输出到 `public/`，Worker 直接托管
 - 本地开发入口切换为 `frontend/vite.config.js` + `@cloudflare/vite-plugin`
 - 开发时由 Vite 驱动 HMR，Worker 仍作为统一入口处理静态资源与动态接口
-- 前端基础 UI 正在迁移到 `shadcn/ui`，视觉主题继续由 `frontend/src/styles.css` 的暖色 token 控制
+- 前端基础 UI 已迁移到 `shadcn/ui`，视觉主题继续由 `frontend/src/styles.css` 的暖色 token 控制
