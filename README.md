@@ -112,12 +112,12 @@ bun run dev
 
 ## 相关文档
 
-- [DESIGN.md](/root/Workspace/sub2clash-workers/DESIGN.md)
-- [.docs/architecture.md](/root/Workspace/sub2clash-workers/.docs/architecture.md)
-- [.docs/api.md](/root/Workspace/sub2clash-workers/.docs/api.md)
-- [.docs/override.md](/root/Workspace/sub2clash-workers/.docs/override.md)
-- [.docs/regression.md](/root/Workspace/sub2clash-workers/.docs/regression.md)
-- [.tasks/roadmap.md](/root/Workspace/sub2clash-workers/.tasks/roadmap.md)
+- [DESIGN.md](./DESIGN.md)
+- [.docs/architecture.md](./.docs/architecture.md)
+- [.docs/api.md](./.docs/api.md)
+- [.docs/override.md](./.docs/override.md)
+- [.docs/regression.md](./.docs/regression.md)
+- [.tasks/roadmap.md](./.tasks/roadmap.md)
 
 ## 鸣谢
 

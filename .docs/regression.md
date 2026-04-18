@@ -368,7 +368,7 @@
   - `$patches` 支持 `merge / replace / remove / upsert`，并提供 `match` 条件匹配和 `position` 插入位置
   - `match` 支持 `equals`、`in`、`notIn`、`includes`、`notIncludes`、`startsWith`、`endsWith`、`regex`、`exists`
   - `src/domain/render.js` 在 override 之后新增一轮 `proxy-groups` 占位符展开，让 override 插入的 `<all>` 等占位符也能正常工作
-  - 新增 [.docs/override.md](/root/Workspace/sub2clash-workers/.docs/override.md)，汇总完整语法、执行顺序、限制和示例
+  - 新增 [.docs/override.md](./override.md)，汇总完整语法、执行顺序、限制和示例
 - 测试：
   - `bun run test:worker -- tests/unit/yaml-override.test.js tests/unit/render.test.js`
   - `bun run test`
