@@ -1,0 +1,50 @@
+mixed-port: 7890
+allow-lan: true
+mode: Rule
+log-level: info
+proxies: []
+proxy-groups:
+  - name: 节点选择
+    type: select
+    proxies:
+      - <countries>
+      - 手动切换
+      - DIRECT
+  - name: 手动切换
+    type: select
+    proxies:
+      - <all>
+  - name: OpenAI
+    type: select
+    proxies:
+      - 节点选择
+      - <countries>
+      - 手动切换
+      - DIRECT
+  - name: 国外媒体
+    type: select
+    proxies:
+      - 节点选择
+      - <countries>
+      - 手动切换
+      - DIRECT
+  - name: Telegram
+    type: select
+    proxies:
+      - 节点选择
+      - <countries>
+      - 手动切换
+      - DIRECT
+  - name: 漏网之鱼
+    type: select
+    proxies:
+      - 节点选择
+      - <countries>
+      - 手动切换
+      - DIRECT
+rules:
+  - DOMAIN-SUFFIX,openai.com,OpenAI
+  - DOMAIN-SUFFIX,chatgpt.com,OpenAI
+  - DOMAIN-SUFFIX,telegram.org,Telegram
+  - GEOIP,LAN,DIRECT
+  - MATCH,漏网之鱼

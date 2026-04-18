@@ -1,5 +1,6 @@
-import { AlertCircle, Copy, Eye, Link2, RefreshCw, Search, Trash2 } from "lucide-react";
+import { AlertCircle, Copy, Eye, Link2, RefreshCw, Search, Trash2, ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import YAML from "yaml";
 
 import Field from "@/components/Field";
 import LinkAutocomplete from "@/components/dashboard/LinkAutocomplete.jsx";
@@ -20,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api.js";
-import { createEmptyConfig, decodeConfigPayload, encodeConfigPayload } from "@/lib/config.js";
+import { createEmptyConfig, decodeConfigPayload, encodeConfigPayload, normalizeConfig } from "@/lib/config.js";
 
 const LONG_LINK_SOFT_LIMIT = 15_500;
 
@@ -193,6 +194,27 @@ export default function DashboardPage({ templates }) {
     }));
   }
 
+  function formatOverrideYaml() {
+    if (!config.override.content.trim()) {
+      showError("覆写内容为空，无需格式化");
+      return;
+    }
+
+    try {
+      const formattedContent = YAML.stringify(YAML.parse(config.override.content));
+      setConfig((current) => ({
+        ...current,
+        override: {
+          ...current.override,
+          content: formattedContent,
+        },
+      }));
+      showSuccess("覆写 YAML 已格式化");
+    } catch (error) {
+      showError(error.message || "覆写 YAML 格式错误，无法格式化");
+    }
+  }
+
   async function renderCurrentConfig() {
     setPreviewLoading(true);
     setPreviewError("");
@@ -241,8 +263,9 @@ export default function DashboardPage({ templates }) {
       if (url.pathname.startsWith("/s/")) {
         const id = url.pathname.split("/").pop();
         const data = await apiFetch(`/api/links/${id}`);
-        setConfig(data.config);
-        setNodesText((data.config.sources?.nodes || []).join("\n"));
+        const nextConfig = normalizeConfig(data.config);
+        setConfig(nextConfig);
+        setNodesText((nextConfig.sources?.nodes || []).join("\n"));
         setShortLinkId(data.id);
         showSuccess("已导入短链接配置");
         return;
@@ -598,6 +621,54 @@ export default function DashboardPage({ templates }) {
                   }))
                 }
               />
+            </div>
+          </EditorSection>
+
+          <EditorSection
+            eyebrow="Override"
+            title="配置覆写"
+            description="支持 Mihomo YAML 覆写语法，在模板合并、规则增强和节点整理之后最终生效"
+          >
+            <Textarea
+              rows={11}
+              aria-label="覆写内容"
+              value={config.override.content}
+              placeholder={
+                '$patches:\n  - target: proxies\n    op: merge\n    match:\n      name:\n        includes: "| 落地"\n    value:\n      dialer-proxy: 前置节点'
+              }
+              onChange={(event) =>
+                setConfig((current) => ({
+                  ...current,
+                  override: {
+                    ...current.override,
+                    content: event.target.value,
+                  },
+                }))
+              }
+            />
+
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                className="px-3 h-8 text-xs"
+                aria-label="格式化覆写 YAML"
+                onClick={formatOverrideYaml}
+              >
+                <span>格式化 YAML</span>
+              </Button>
+              <p className="text-sm leading-6 text-muted-foreground">
+                高级语法支持 <code className="bg-primary/10 px-1.5 py-0.5">$patches</code>{" "}
+                <code className="bg-primary/10 px-1.5 py-0.5">$select</code>{" "}
+                <a
+                  className="ml-1 text-primary inline-flex items-center hover:underline"
+                  href="https://tokinx.github.io/sub2clash-workers/.docs/override.md"
+                  target="_blank"
+                >
+                  查看文档
+                  <ExternalLink className="w-3 h-3 inline ml-1" />
+                </a>
+              </p>
             </div>
           </EditorSection>
 

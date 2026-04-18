@@ -8,6 +8,13 @@
 本项目基于 <a href="https://github.com/bestnite/sub2clash" target="_blank">bestnite/sub2clash</a>，90% 由 AI 重新开发
 </div>
 
+## 演示
+```
+演示地址：https://sub2clash-example.tokin.workers.dev
+演示密码：eXample123456
+！！！演示站点请勿提交敏感信息，演示站点进攻界面与功能展示，随时关闭！！！
+```
+
 ## 界面预览
 
 ![SnapShort](./snapshort.png)
@@ -16,6 +23,7 @@
 
 - 把多个订阅、零散节点和自定义规则收口到一个统一入口
 - 需要一个工具维护模板、规则和短链接，而不是手写 YAML
+- 扩展了 $patches、$select，服务端配置覆写规则更轻松
 - 无需服务器，部署简单无需维护
 
 ## 协议支持
@@ -104,11 +112,12 @@ bun run dev
 
 ## 相关文档
 
-- [DESIGN.md](/root/Workspace/sub2clash-workers/DESIGN.md)
-- [.docs/architecture.md](/root/Workspace/sub2clash-workers/.docs/architecture.md)
-- [.docs/api.md](/root/Workspace/sub2clash-workers/.docs/api.md)
-- [.docs/regression.md](/root/Workspace/sub2clash-workers/.docs/regression.md)
-- [.tasks/roadmap.md](/root/Workspace/sub2clash-workers/.tasks/roadmap.md)
+- [DESIGN.md](./DESIGN.md)
+- [.docs/architecture.md](./.docs/architecture.md)
+- [.docs/api.md](./.docs/api.md)
+- [.docs/override.md](./.docs/override.md)
+- [.docs/regression.md](./.docs/regression.md)
+- [.tasks/roadmap.md](./.tasks/roadmap.md)
 
 ## 鸣谢
 

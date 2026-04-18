@@ -77,3 +77,17 @@
 - 在 `AGENTS.md` 明确“所有提交文件必须脱敏”的仓库级约束
 - 同步更新回归文档，避免后续排障记录再次回流真实环境信息
 - 状态：已完成
+
+## Phase 13
+
+- 为单份配置增加 YAML override，跟随长链接、短链接和预览全链路流转
+- 在域层实现 Clash Party 风格覆写语义，并明确 `nodeList` 模式下的忽略 warning
+- 在 Dashboard 增加覆写编辑区与格式化交互，补齐 Worker / 前端回归
+- 状态：已完成
+
+## Phase 14
+
+- 为 YAML override 增加项目自定义扩展语法：`$patches` 条件更新、`$select` 动态提取
+- 支持用 override 对对象数组做 `merge / replace / remove / upsert`，覆盖“前置节点 + dialer-proxy”这类声明式场景
+- 补充完整 override 文档，并让 override 新增的 `proxy-groups` 也支持占位符展开
+- 状态：已完成

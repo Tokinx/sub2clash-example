@@ -335,3 +335,49 @@
 - 结果：
   - 未填写 `User-Agent` 时，配置默认不再注入内置标识
   - 前端页面默认展示空输入，并通过 placeholder 明确该项为可选
+
+## YAML 覆写回归 2026-04-18 CST
+
+- 状态：已完成
+- 目标：为单份配置增加 YAML override，并让覆写内容随长链接、短链接和预览全链路流转
+- 变更：
+  - `src/domain/config.js` 与 `frontend/src/lib/config.js` 新增 `override: { type, content }` 配置段，当前仅接受 `type: yaml`
+  - `src/domain/yaml-override.js` 新增覆写合并器，支持深度合并、`!` 整段替换、`+key` 前插数组、`key+` 后追加数组和 `<...>` 转义真实键名
+  - `src/domain/render.js` 调整为“模板合并 -> 应用 override -> deepClean -> YAML 输出”，并在 `nodeList` 模式返回“仅输出节点列表时已忽略覆写” warning
+  - `frontend/src/pages/DashboardPage.jsx` 新增“配置覆写”编辑区与 YAML 格式化按钮，导入长链接/短链接时可回填 override 内容
+  - 更新 `.docs/architecture.md`、`.docs/api.md`、`.tasks/roadmap.md`，明确 override 字段、渲染顺序与 `nodeList` 特例
+- 测试：
+  - `bun run test:worker -- tests/unit/config.test.js tests/unit/yaml-override.test.js tests/unit/render.test.js tests/integration/api.test.js`
+  - `cd frontend && bun run test -- src/pages/DashboardPage.test.jsx src/pages/DashboardPage.user-agent.test.jsx`
+  - `bun run build:frontend`
+  - `bun run test`
+- 结果：
+  - Worker 侧 6 个测试文件、33 个测试用例通过
+  - 前端 5 个测试文件、8 个测试用例通过
+  - 前端生产构建通过，`public/index.html` 与 `public/assets/*` 已更新
+- 现存风险：
+  - 当前仅支持 YAML override，不支持 JavaScript override
+  - Vite 生产构建仍提示主包体积超过 500 kB，本次未处理拆包
+
+## YAML 覆写语法扩展回归 2026-04-18 CST
+
+- 状态：已完成
+- 目标：让 YAML override 能覆盖对象数组条件修改、upsert 策略组和动态提取现有节点字段的场景，替代一部分原本必须依赖 JavaScript override 的需求
+- 变更：
+  - `src/domain/yaml-override.js` 新增顶层 `$patches` 和值级 `$select`
+  - `$patches` 支持 `merge / replace / remove / upsert`，并提供 `match` 条件匹配和 `position` 插入位置
+  - `match` 支持 `equals`、`in`、`notIn`、`includes`、`notIncludes`、`startsWith`、`endsWith`、`regex`、`exists`
+  - `src/domain/render.js` 在 override 之后新增一轮 `proxy-groups` 占位符展开，让 override 插入的 `<all>` 等占位符也能正常工作
+  - 新增 [.docs/override.md](./override.md)，汇总完整语法、执行顺序、限制和示例
+- 测试：
+  - `bun run test:worker -- tests/unit/yaml-override.test.js tests/unit/render.test.js`
+  - `bun run test`
+  - `bun run build:frontend`
+- 结果：
+  - Worker 侧 6 个测试文件、39 个测试用例通过
+  - 前端 5 个测试文件、8 个测试用例通过
+  - YAML override 现已能表达“按节点名命中后写入 `dialer-proxy`”“不存在则 upsert 前置节点组”“从 `proxies` 动态提取名字列表”等场景
+  - override 新增的策略组中使用 `<all>` 不会再原样泄漏到最终 YAML
+- 现存风险：
+  - `$patches` 当前要求 `target` 指向已存在的数组字段，不会自动创建缺失路径
+  - `$select` 当前只支持返回数组，不支持聚合、去重和排序等更复杂表达式
